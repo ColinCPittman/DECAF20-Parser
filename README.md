@@ -1,2 +1,2 @@
 # DECAF20-Parser
-Compiler front end project.
+This repository contains a simple scanner and parser for the DECAF language, written in Python.
