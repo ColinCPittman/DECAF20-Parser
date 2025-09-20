@@ -1,14 +1,16 @@
 import sys
 
 class Token:
-    def __init__(self, identifier, line, start_col, end_col, type, is_operator = False, is_constant = False):
+    def __init__(self, identifier, line, start_col, end_col, type, is_operator = False, is_constant = False, const_value = None):
         self.identifier = identifier
         self.line = line
         self.start_col = start_col
         self.end_col = end_col
         self.type = type
         self.is_operator = is_operator
-        self.is_constant = type == 'T_CHARCONSTANT' or type == 'T_INTCONSTANT' or type == 'T_STRINGCONSTANT'
+        if is_constant is not False:
+            self.is_constant = type == 'T_CHARCONSTANT' or type == 'T_INTCONSTANT' or type == 'T_STRINGCONSTANT'
+        self.const_value = const_value
 
     def print_token(self):
         if not self.is_operator:
@@ -17,7 +19,7 @@ class Token:
             # the expected output shows that constant types repeat the value after the type (e.g. T_INTCONSTANT (value = 1))
             print(f"{self.identifier} \t line {self.line} Cols {self.start_col} - {self.end_col} is {self.type} (value = {self.identifier})")
         else: 
-            # the expected output shows that operators aren't printed with their type
+            # the expected output shows that operators have their identifier printed in the stead of their type
             print(f"{self.identifier} \t line {self.line} Cols {self.start_col} - {self.end_col} is '{self.identifier}'")
 
 class Scanner:
@@ -77,21 +79,46 @@ class Scanner:
         
     
     # letter => "A" ... "Z" | "a" ... "z" | "_"
-    def _char_isletter(self, char):
-        return char.isalpha() or char == "_"
+    def _char_isletter(self):
+        return self.input[self.index].isalpha() or self.input[self.index] == "_"
 
+    # hex_lit     => "0" ( "x" | "X" ) { hex_digit }
     def _is_start_of_hex(self):
         return (self.index + 1 < len(self.input) # not out of bounds 
                     and (self.input[self.index] == '0' and 
                     (self.input[self.index + 1] == 'x' or self.input[self.index + 1] == "X"))) # is 0x or 0X
+
+    # escaped_char => "\" ( "n" | "r" | "t" | "v" | "f" | "a" | "b" | `\` | "'" | `"` )
+    def _is_escaped_char(self):
+        return (self.index + 1 < len(self.input) and 
+                self.input[self.index] == '\' and 
+                self.input[self.index + 1] in ['n', 'r', 't', 'v', 'f', 'a', 'b', '\', "'", '"'])
+    
+    # char => all ASCII characters from 7 ... 13 and 32 ... 126 except char 10 "\n", char 92 "\" and char 34: "
+    def _is_char(self):
+        char_ordinal = ord(self.input[self.index])
+        return ((7 <= char_ordinal <= 13) or (32 <= char_ordinal <= 126)) and char_ordinal not in [10, 92, 34]
+    
+    # char_lit_chars => all ASCII characters from 7 ... 13 and 32 ... 126 except char 39 "'" and char 92 "\"
+    def _is_char_lit_chars(self):
+        char_ordinal = ord(self.input[self.index])
+        return ((7 <= char_ordinal <= 13) or (32 <= char_ordinal <= 126)) and char_ordinal not in [39, 92]
+    
+    #consume char and advance pointers
+    def _advance(self):
+        temp_char = self.input[self.index]
+        self.index += 1
+        self.col += 1
+        return temp_char
        
+    # primary method intented for public use to convert input file to a set of tokens, dispatches to helper functions
     def tokenize(self):
         while self.index < len(self.input):
             if (self.input[self.index] == "'" 
                     or self.input[self.index] == '"'
                     or self.input[self.index].isdigit()):
                 self._scan_literals()
-            elif self._char_isletter(self.input[self.index]):
+            elif self._char_isletter():
                 self._scan_alphanum()
             elif self.input[self.index] in self.operators:
                 self._scan_operators()
@@ -126,32 +153,30 @@ class Scanner:
         initial_col = self.col
         identifier = ''
 
+        #hexadecimal literals
         if self._is_start_of_hex(): 
-            identifier += self.input[self.index] + self.input[self.index + 1]
-            self.index += 2
-            self.col += 2
+            identifier += self._advance() + self._advance()  # consume ('0' and ('x' or 'X'))
             while self.index < len(self.input) and self.input[self.index].isxdigit():
-                identifier += self.input[self.index]
-                self.index += 1
-                self.col += 1
-             self.tokens.append(Token(identifier, self.line, initial_col, self.col - 1, 'T_INTCONSTANT'))
+                identifier += self._advance()
+             self.tokens.append(Token(identifier, self.line, initial_col, self.col - 1, 'T_INTCONSTANT', is_const = True))
 
+        #decimal literals
         elif self.input[self.index].isdigit():
              while self.index < len(self.input) and self.input[self.index].isdigit():
-                identifier += self.input[self.index]
-                self.index += 1
-                self.col += 1
-            self.tokens.append(Token(identifier, self.line, initial_col, self.col -1, 'T_INTCONSTANT'))
-            
+                identifier += self._advance()
+            self.tokens.append(Token(identifier, self.line, initial_col, self.col - 1, 'T_INTCONSTANT', is_const = True))
+        
+        #string literals
         elif self.input[self.index] == '"':
-            pass
+            identifier += self._advance()
+            while self.index < len(self.input) and self.input[self.index] != '"':
+                if self._is_char() or self._is_escaped_char():
+                #TODO
         else: # starts with a "'"
             pass
 
         while self.index < len(self.input):
-            identifier += self.input[self.index]
-            self.index += 1
-            self.col += 1
+            identifier += self._advance()
         
         self.tokens.append(Token(identifier, self.line, initial_col, self.col - 1, 'placeholder'))
 
@@ -161,10 +186,8 @@ class Scanner:
     def _scan_alphanum(self):
         initial_col = self.col
         identifier = ''
-        while self.index < len(self.input) and (self._char_isletter(self.input[self.index]) or self.input[self.index].isdigit()):
-            identifier += self.input[self.index]
-            self.index += 1
-            self.col += 1
+        while self.index < len(self.input) and (self._char_isletter() or self.input[self.index].isdigit()):
+            identifier += self._advance()
         if identifier in self.keywords:
             self.tokens.append(Token(identifier, self.line, initial_col, self.col - 1, self.keywords[identifier]))
         else:
