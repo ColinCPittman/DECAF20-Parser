@@ -1,8 +1,9 @@
 import sys
+from Parser import parseTokens
 
 class Token:
     def __init__(self, identifier, line, start_col, end_col, type, is_operator = False, is_constant = False, const_value = None):
-        self.identifier = identifier
+        self.value = identifier
         self.line = line
         self.start_col = start_col
         self.end_col = end_col
@@ -10,21 +11,21 @@ class Token:
         self.is_operator = is_operator
         self.is_constant = is_constant
         if self.is_constant:
-            self.is_constant = type == 'T_CHARCONSTANT' or type == 'T_IntConstant' or type == 'T_STRINGCONSTANT' or type == 'T_BoolConstant'
+            self.is_constant = type == 'T_CharConstant' or type == 'T_IntConstant' or type == 'T_StringConstant' or type == 'T_BoolConstant'
         self.const_value = const_value
-
+    
     def print_token(self):
         if self.is_operator:
             # 2-character operators like <=, &&, show the token type instead of the indentifier after 'is' in the expected output
-            if len(self.identifier) > 1:
-                print(f"{self.identifier} \t line {self.line} Cols {self.start_col} - {self.end_col} is {self.type}")
+            if len(self.value) > 1:
+                print(f"{self.value} \t line {self.line} Cols {self.start_col} - {self.end_col} is {self.type}")
             else:
-                print(f"{self.identifier} \t line {self.line} Cols {self.start_col} - {self.end_col} is '{self.identifier}'")
+                print(f"{self.value} \t line {self.line} Cols {self.start_col} - {self.end_col} is '{self.value}'")
         elif self.is_constant: 
             # the expected output shows that constant types repeat the value after the type (e.g. T_IntConstant (value= 1))
-            print(f"{self.identifier} \t line {self.line} Cols {self.start_col} - {self.end_col} is {self.type} (value= {self.identifier})")
+            print(f"{self.value} \t line {self.line} Cols {self.start_col} - {self.end_col} is {self.type} (value= {self.value})")
         else: 
-            print(f"{self.identifier} \t line {self.line} Cols {self.start_col} - {self.end_col} is {self.type}")
+            print(f"{self.value} \t line {self.line} Cols {self.start_col} - {self.end_col} is {self.type}")
 
 class Scanner:
     def __init__(self, input):
@@ -62,24 +63,24 @@ class Scanner:
         }
         #some of these keywords had to deviate from the all-caps format specified to match the expected output
         self.keywords = {
-            'bool': 'T_IDENTIFIER', # spec says this should be 'T_BOOLTYPE' but expected output shows 'T_IDENTIFIER'
-            'break': 'T_BREAK',
-            'continue': 'T_CONTINUE',
+            'bool': 'T_Identifier', # spec says this should be 'T_BOOLTYPE' but expected output shows 'T_IDENTIFIER'
+            'break': 'T_Break',
+            'continue': 'T_Continue',
             'else': 'T_Else',
-            'extern': 'T_EXTERN',
+            'extern': 'T_Extern',
             'false': 'T_BoolConstant',
             'for': 'T_For',
-            'func': 'T_FUNC',
+            'func': 'T_Func',
             'if': 'T_If',
             'int': 'T_Int',
-            'null': 'T_NULL',
-            'package': 'T_PACKAGE',
+            'null': 'T_Null',
+            'package': 'T_Package',
             'return': 'T_Return',
             'string': 'T_String', # this is 'T_STRINGTYPE' in the spec but had to change it to 'T_String' to match expected output
             'true': 'T_BoolConstant',
-            'var': 'T_VAR',
+            'var': 'T_Var',
             'void': 'T_Void',
-            'while': 'T_WHILE',
+            'while': 'T_While',
             'Print': 'T_Print'
         }
         
@@ -90,7 +91,7 @@ class Scanner:
 
     # hex_lit     => "0" ( "x" | "X" ) { hex_digit }
     def _is_start_of_hex(self):
-        return (self.index + 1 < len(self.input) # not out of bounds 
+        return (self.index + 1 < len(self.input)
                     and (self.input[self.index] == '0' and 
                     (self.input[self.index + 1] == 'x' or self.input[self.index + 1] == "X"))) # is 0x or 0X
 
@@ -181,7 +182,7 @@ class Scanner:
                 elif self._is_char(): 
                     identifier += self._advance() # consume normal char
             identifier += self._advance() # consume the end double quote
-            self.tokens.append(Token(identifier, self.line, initial_col, self.col - 1, "T_STRINGCONSTANT", is_constant = True))
+            self.tokens.append(Token(identifier, self.line, initial_col, self.col - 1, "T_StringConstant", is_constant = True))
         
         #character literals
         else: # starts with a "'"
@@ -191,7 +192,7 @@ class Scanner:
             elif self._is_char_lit_chars():
                 identifier += self._advance()
             identifier += self._advance() # consume ending single quote
-            self.tokens.append(Token(identifier, self.line, initial_col, self.col - 1, "T_CHARCONSTANT", is_constant = True))
+            self.tokens.append(Token(identifier, self.line, initial_col, self.col - 1, "T_CharConstant", is_constant = True))
 
 
     # this function generates tokens for identifiers and keywords
@@ -204,14 +205,14 @@ class Scanner:
 
         # keywords    
         if identifier in self.keywords: 
-            if identifier == 'true' or identifier == 'false': #booleans are the only constant type the can be encountered in a keyword match
+            if identifier == 'true' or identifier == 'false': #booleans are the only constant type that can be encountered in a keyword match
                 self.tokens.append(Token(identifier, self.line, initial_col, self.col - 1, self.keywords[identifier], is_constant = True))
             else:
                 self.tokens.append(Token(identifier, self.line, initial_col, self.col - 1, self.keywords[identifier]))
         
         # identifiers
         else:
-            self.tokens.append(Token(identifier, self.line, initial_col, self.col - 1, 'T_IDENTIFIER')) #DECAF20 spec specifies this type label as 'T_ID' but changing it to 'T_IDENTIFIER' to match expected output
+            self.tokens.append(Token(identifier, self.line, initial_col, self.col - 1, 'T_Identifier')) #DECAF20 spec specifies this type label as 'T_ID' but changing it to 'T_Identifier' to match expected output
 
     def _scan_operator(self):
         initial_col = self.col
@@ -248,7 +249,12 @@ def main():
             contents = file.read()
             scanner = Scanner(contents)
             scanner.tokenize()
-            scanner.print_tokens()
+            
+            program_node, has_error = parseTokens(scanner.tokens, contents)
+            
+            if not has_error and program_node:
+                program_node.print_tree()
+                
     except FileNotFoundError:
         print(f"{input_file} not found")
 

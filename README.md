@@ -6,4 +6,4 @@ This repository contains a simple scanner and parser for the [DECAF language](ht
 ``` bash
 python main.py [.decaf file]
 ```
-Output is a printed list of generated lexeme tokens based on the input .decaf file.
+Output is a printed list of the parse tree or errors.
