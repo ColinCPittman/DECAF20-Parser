@@ -7,7 +7,7 @@ The project follows a modular, object-oriented design to represent the language'
 
 - Parser.py: The core engine implementing recursive descent logic.
 
-- Individual classes for every statement and expression type in the AST (e.g., ReturnStmt.py, BreakStmt.py, Variable.py).
+- Individual classes for every statement and expression type in the abstract syntax tree (e.g., ReturnStmt.py, BreakStmt.py, Variable.py).
 
 - Type.py module to handle base types and array structures.
 
